@@ -1,95 +1,115 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Schwab OAuth</title>
-    <style>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Schwab OAuth</title>
+  <style>
     textarea {
-        position: fixed;
-        top: 0px;
-        left: 0px;
-        right: 0px;
-        bottom: 0px;
-        padding: 15px;
-        color: limegreen;
-        background-color: black;
+      position: fixed;
+      top: 0px;
+      left: 0px;
+      right: 0px;
+      bottom: 0px;
+      padding: 15px;
+      color: limegreen;
+      background-color: black;
     }
-    </style>
-  </head>
-  <body>
-    <textarea>Loading...</textarea>
-    <form action="https://api.schwabapi.com/v1/oauth/authorize" method="get">
-      <input type="hidden" name="client_id" value="" />
-      <input type="hidden" name="redirect_uri" value="" />
-    </form>
-    <script>
-      let step = 0;
-      let redirect_uri = "https://oauth.codeedge.com.br";
+  </style>
+</head>
 
-      // Step 1
-      // https://oauth.codeedge.com.br/?client_id=xxx&client_secret=xxx
-      let queryString = window.location.search;
-      let urlParams = new URLSearchParams(queryString);
-      let client_id = urlParams.get("client_id");
-      let client_secret = urlParams.get("client_secret");
-      if (client_id && client_secret) {
-        step = 1;
-        window.sessionStorage.setItem("client_id", client_id);
-        window.sessionStorage.setItem("client_secret", client_secret);
-        document.querySelector("textarea").value = "Step 1 (App Authorization)\nRedirecting...";
-        document.querySelector('input[name="client_id"]').value = client_id;
-        document.querySelector('input[name="client_id"]').value = client_id;
-        document.querySelector('input[name="redirect_uri"]').value = redirect_uri;
-        document.querySelector("form").submit();
-      }
+<body>
+  <textarea>Loading...</textarea>
+  <form action="https://api.schwabapi.com/v1/oauth/authorize" method="get">
+    <input type="hidden" name="client_id" value="" />
+    <input type="hidden" name="redirect_uri" value="" />
+  </form>
+  <script>
+    function parseJwt(token) {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(atob(base64).split('').map(function (c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      return JSON.parse(jsonPayload);
+    }
 
-      // Step 2
-      // https://oauth.codeedge.com.br/?code=xxx&session=xxx
-      let code = urlParams.get("code");
-      let session = urlParams.get("session");
-      if (code && session) {
-        step = 2;
-        document.querySelector("textarea").value = "Step 2 (Access Token Creation)\nRequesting...";
-        client_id = window.sessionStorage.getItem("client_id");
-        client_secret = window.sessionStorage.getItem("client_secret");
-        fetch("https://api.schwabapi.com/v1/oauth/token", {
-          method: "POST",
-          headers: {
-            Authorization: "Basic " + btoa(client_id + ":" + client_secret),
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: new URLSearchParams({
-            grant_type: "authorization_code",
-            code,
-            redirect_uri,
-          }),
+    let step = 0;
+    let redirect_uri = "https://oauth.codeedge.com.br";
+
+    // Step 1
+    // https://oauth.codeedge.com.br/?client_id=xxx&client_secret=xxx
+    let queryString = window.location.search;
+    let urlParams = new URLSearchParams(queryString);
+    let client_id = urlParams.get("client_id");
+    let client_secret = urlParams.get("client_secret");
+    if (client_id && client_secret) {
+      step = 1;
+      window.sessionStorage.setItem("client_id", client_id);
+      window.sessionStorage.setItem("client_secret", client_secret);
+      document.querySelector("textarea").value = "Step 1 (App Authorization)\nRedirecting...";
+      document.querySelector('input[name="client_id"]').value = client_id;
+      document.querySelector('input[name="client_id"]').value = client_id;
+      document.querySelector('input[name="redirect_uri"]').value = redirect_uri;
+      document.querySelector("form").submit();
+    }
+
+    // Step 2
+    // https://oauth.codeedge.com.br/?code=xxx&session=xxx
+    let code = urlParams.get("code");
+    let session = urlParams.get("session");
+    if (code && session) {
+      step = 2;
+      document.querySelector("textarea").value = "Step 2 (Access Token Creation)\nRequesting...";
+      client_id = window.sessionStorage.getItem("client_id");
+      client_secret = window.sessionStorage.getItem("client_secret");
+      fetch("https://api.schwabapi.com/v1/oauth/token", {
+        method: "POST",
+        headers: {
+          Authorization: "Basic " + btoa(client_id + ":" + client_secret),
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          grant_type: "authorization_code",
+          code,
+          redirect_uri,
+        }),
+      })
+        .then((response) => response.json())
+        .then((json) => {
+          console.log("Step 2 success:", json);
+          const decoded_id_token = parseJwt(json.id_token);
+          const token_json = {
+            "creation_timestamp": decoded_id_token.iat,
+            "token": {
+              ...json,
+              "expires_at": decoded_id_token.exp
+            }
+          }
+          document.querySelector("textarea").value = JSON.stringify(token_json, null, 2);
         })
-          .then((response) => response.json())
-          .then((json) => {
-            console.log("Step 2 success:", json);
-            document.querySelector("textarea").value = JSON.stringify(json, null, 2);
-          })
-          .catch((error) => {
-            console.log("Step 2 error:", error);
-            document.querySelector("textarea").value = "Step 2 (Access Token Creation)\nError";
-          })
-          .finally(() => {
-            window.sessionStorage.removeItem("client_id");
-            window.sessionStorage.removeItem("client_secret");
-          });
-      }
+        .catch((error) => {
+          console.log("Step 2 error:", error);
+          document.querySelector("textarea").value = "Step 2 (Access Token Creation)\nError";
+        })
+        .finally(() => {
+          window.sessionStorage.removeItem("client_id");
+          window.sessionStorage.removeItem("client_secret");
+        });
+    }
 
-      if (step === 0) {
-        client_id = window.prompt('Enter your client_id:');
-        client_secret = window.prompt('Enter your client_secret:');
-        if (client_id && client_secret) {
-            queryString = new URLSearchParams({ client_id, client_secret }).toString();
-            window.location.href = window.location.pathname + '?' + queryString;
-        } else {
-            document.querySelector("textarea").value = "Step 1 (App Authorization)\nRefresh the page";
-        }
+    if (step === 0) {
+      client_id = window.prompt('Enter your client_id:');
+      client_secret = window.prompt('Enter your client_secret:');
+      if (client_id && client_secret) {
+        queryString = new URLSearchParams({ client_id, client_secret }).toString();
+        window.location.href = window.location.pathname + '?' + queryString;
+      } else {
+        document.querySelector("textarea").value = "Step 1 (App Authorization)\nRefresh the page";
       }
-    </script>
-  </body>
+    }
+  </script>
+</body>
+
 </html>
