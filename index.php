@@ -9,7 +9,7 @@ function parseJwt($token)
     return json_decode($jsonPayload, true);
 }
 
-$redirect_uri = "https://{$_SERVER['HTTP_HOST']}{$_SERVER['REQUEST_URI']}";
+$redirect_uri = "https://oauth.codeedge.com.br";
 $queryParams = $_GET;
 
 if (isset($queryParams['client_id'], $queryParams['client_secret'])) {
